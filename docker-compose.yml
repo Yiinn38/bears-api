@@ -1,19 +1,4 @@
-# Docker Compose file for Vapor
-#
-# Install Docker on your system to run and test
-# your Vapor app in a production-like environment.
-#
-# Note: This file is intended for testing and does not
-# implement best practices for a production deployment.
-#
-# Learn more: https://docs.docker.com/compose/reference/
-#
-#   Build images: docker compose build
-#      Start app: docker compose up app
-# Start database: docker compose up db
-# Run migrations: docker compose run migrate
-#       Stop all: docker compose down (add -v to wipe db)
-#
+# version: '3.8'
 
 volumes:
   db_data:
@@ -33,11 +18,12 @@ services:
     environment:
       <<: *shared_environment
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     ports:
       - '8080:8080'
-    # user: '0' # uncomment to run as root for testing purposes even though Dockerfile defines 'vapor' user.
     command: ["serve", "--env", "production", "--hostname", "0.0.0.0", "--port", "8080"]
+
   migrate:
     image: bearapi:latest
     build:
@@ -45,29 +31,26 @@ services:
     environment:
       <<: *shared_environment
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     command: ["migrate", "--yes"]
     deploy:
       replicas: 0
-  revert:
-    image: bearapi:latest
-    build:
-      context: .
-    environment:
-      <<: *shared_environment
-    depends_on:
-      - db
-    command: ["migrate", "--revert", "--yes"]
-    deploy:
-      replicas: 0
+
   db:
-    image: mysql:8
+    image: mysql:8.0
+    command: --default-authentication-plugin=mysql_native_password
     volumes:
       - db_data:/var/lib/mysql
     environment:
       MYSQL_USER: vapor_username
       MYSQL_PASSWORD: vapor_password
-      MYSQL_DATABASE: vapor_database
+      MYSQL_DATABASE: vapor_database  # Esta línea crea automáticamente la DB
       MYSQL_RANDOM_ROOT_PASSWORD: 'yes'
     ports:
       - '3306:3306'
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -u $$MYSQL_USER -p$$MYSQL_PASSWORD"]
+      interval: 5s
+      timeout: 10s
+      retries: 10
